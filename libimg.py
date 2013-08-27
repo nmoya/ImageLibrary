@@ -24,7 +24,7 @@ class NMImage ():
     def open(self):
         #http://flockhart.virtualave.net/RBIF0100/regexp.html
         io.use_plugin("freeimage")
-        self.data = io.imread(self.filename)
+        self.data = io.imread(self.filename).astype("uint8")
         self.sizex = self.data.shape[0]
         self.sizey = self.data.shape[1]
 
@@ -119,14 +119,14 @@ class NMImage ():
         minval, maxval = self.minmaxvalue()
         output.maxval = maxval
         output.data.astype('uint8')
-        if (minval < maxval):
+        if minval < maxval:
             for p in range(output.size):
                 coord = output.getCoord(p)
-                numerador = (sup-inf) * (self.getPixel(coord)-minval)
-                denominador = (maxval-minval) + inf
-                result = numerador / denominador
+                numerator = (sup-inf) * (self.getPixel(coord)-minval)
+                denominator = (maxval-minval) + inf
+                result = numerator / denominator
                 result = int(result)
-                output.data[coord[Y], coord[X]] = numpy.int(result)
+                output.data[coord[Y], coord[X]] = numpy.uint8(result)
         else:
             self.error("Empty image", "normalize")
         return output

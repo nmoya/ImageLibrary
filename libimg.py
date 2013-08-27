@@ -118,7 +118,6 @@ class NMImage ():
 
         minval, maxval = self.minmaxvalue()
         output.maxval = maxval
-        output.data.astype('uint8')
         if minval < maxval:
             for p in range(output.size):
                 coord = output.getCoord(p)
@@ -129,6 +128,7 @@ class NMImage ():
                 output.data[coord[Y], coord[X]] = numpy.uint8(result)
         else:
             self.error("Empty image", "normalize")
+        output.data.astype('uint8')
         return output
 
     def logTransform(self, c):

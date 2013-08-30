@@ -25,13 +25,14 @@ class NMImage ():
         #http://flockhart.virtualave.net/RBIF0100/regexp.html
         io.use_plugin("freeimage")
         self.data = io.imread(self.filename)
+        self.data = self.data.astype("float64")
         self.sizex = self.data.shape[0]
         self.sizey = self.data.shape[1]
 
         return self.data
 
     def save(self, name):
-        if self.data.dtype == "float64":
+        if self.data.dtype != "uint8":
             self.data = self.data.astype("uint8")
         io.use_plugin("freeimage")
         io.imsave(name, self.data)
@@ -68,7 +69,8 @@ class NMImage ():
     def histogram(self, title=''):
         from matplotlib import pyplot as plt
         plt.figure()
-        plt.hist(self.data)
+        plt.hist(self.data.reshape(-1), bins=256)
+        plt.xlim([0,255])
         if len(title) == 0:
             title = self.filename
         plt.title(title, fontsize=14)
@@ -131,35 +133,32 @@ class NMImage ():
                 output.data[coord[Y], coord[X]] = result
         else:
             self.error("Empty image", "normalize")
-        output.data = output.data.astype("uint8")
         return output
 
     def logTransform(self):
         #To speed the process and avoid normalization, the c_value keeps
         #the result inside the [0, 255] range.
         output = self.copy()
-        print output.minmaxvalue()
-        c_value = 255/numpy.log10(255+1)
-        output.data = numpy.log10(output.data + 2) * c_value
-        print output.minmaxvalue()
+        c_value = 255/numpy.log10(255.+1)
+        output.data = output.data + 1.
+        output.data = numpy.log10(output.data) * c_value
         return output
 
     def expTransform(self):
         output = self.copy()
         c_value = 255 / math.e
         output.data = numpy.exp(output.data / 255.) * c_value
-        print output.minmaxvalue()
         return output.normalize(0, 255)
 
     def squareTransform(self):
         output = self.copy()
-        c_value = 255/(255*255)
-        output.data = (output.data * output.data) * c_value
-        return output
+        c_value = 255./(255. * 255.)
+        output.data = numpy.square(output.data) * c_value
+        return output.normalize(0, 255)
 
     def sqrtTransform(self):
         output = self.copy()
-        c_value = 255/math.sqrt(255)
+        c_value = 255/math.sqrt(255.)
         output.data = numpy.sqrt(output.data) * c_value
         return output
 

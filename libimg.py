@@ -24,23 +24,17 @@ class NMImage ():
     def open(self):
         #http://flockhart.virtualave.net/RBIF0100/regexp.html
         io.use_plugin("freeimage")
-        self.data = io.imread(self.filename).astype("uint8")
+        self.data = io.imread(self.filename)
         self.sizex = self.data.shape[0]
         self.sizey = self.data.shape[1]
 
         return self.data
 
     def save(self, name):
+        if self.data.dtype == "float64":
+            self.data = self.data.astype("uint8")
         io.use_plugin("freeimage")
         io.imsave(name, self.data)
-        # Save ASCII
-        '''out = open(name, "w")
-        outstring = "P2\n%s %s %s\n" % (self.sizex, self.sizey, "255")
-        for y in range(self.sizey):
-            for x in range(self.sizex):
-                outstring += str(self.data[y, x]) + " "
-        out.write(outstring)
-        out.close()'''
 
     def getPixel(self, coord):
         return self.data[coord[Y], coord[X]]
@@ -52,28 +46,41 @@ class NMImage ():
         #http://cl.ly/image/380z3r3y1H19
         x = (position % (self.sizex*self.sizey)) % self.sizex
         y = (position % (self.sizex*self.sizey)) / self.sizex
-        return (y, x)
+        return (x, y)
 
     def show(self, title=''):
         from matplotlib import pyplot as plt
         import matplotlib.cm as cm
-        if self.filename.endswith(".pgm"):
-            plt.imshow(self.data, cmap=cm.Greys_r)
+        plt.figure()
+        if self.filename.endswith("pgm"):
+            plt.imshow(self.data, cmap=cm.gray)
         else:
             plt.imshow(self.data)
         plt.axis('off')
         if len(title) == 0:
             title = self.filename
         plt.title(title, fontsize=14)
+
+    def showAll(self):
+        from matplotlib import pyplot as plt
         plt.show()
+
+    def histogram(self, title=''):
+        from matplotlib import pyplot as plt
+        plt.figure()
+        plt.hist(self.data)
+        if len(title) == 0:
+            title = self.filename
+        plt.title(title, fontsize=14)
 
     def copy(self):
         return copy.deepcopy(self)
 
     def minmaxvalue(self):
-        minval = 99999
-        maxval = -99999
+        minval = self.data[0][0]
+        maxval = self.data[0][0]
         for i in range(self.size):
+            #print i
             pixelvalue = self.getPixel(self.getCoord(i))
             if pixelvalue < minval:
                 minval = pixelvalue
@@ -95,59 +102,85 @@ class NMImage ():
 #######################################################
 
     def binarize(self, threshold, min, max):
+        output = self.copy()
         for i in range(self.size):
-            coord = self.getCoord(i)
-            if self.getPixel(coord) > threshold:
-                self.putPixel(coord, max)
+            coord = output.getCoord(i)
+            if output.getPixel(coord) > threshold:
+                output.putPixel(coord, max)
             else:
-                self.putPixel(coord, min)
+                output.putPixel(coord, min)
+        return output
 
     def invert(self):
+        output = self.copy()
         for i in range(self.size):
-            coord = self.getCoord(i)
-            value = self.getPixel(coord)
-            self.putPixel(coord, self.maxval - value)
-
-    def histogram(self):
-        from matplotlib import pyplot as plt
-        plt.hist(self.data)
-        plt.show()
+            coord = output.getCoord(i)
+            value = output.getPixel(coord)
+            output.putPixel(coord, output.maxval - value)
+        return output
 
     def normalize(self, inf, sup):
         output = self.copy()
-
-        minval, maxval = self.minmaxvalue()
-        output.maxval = maxval
+        minval, maxval = output.minmaxvalue()
+        output.maxval = sup
+        a_value = (sup-inf) / ((maxval - minval) * 1.0)
         if minval < maxval:
             for p in range(output.size):
                 coord = output.getCoord(p)
-                numerator = (sup-inf) * (self.getPixel(coord)-minval)
-                denominator = (maxval-minval) + inf
-                result = numerator / denominator
-                result = int(result)
-                output.data[coord[Y], coord[X]] = numpy.uint8(result)
+                result = ((a_value * output.getPixel(coord)) - (a_value * minval)) + inf
+                output.data[coord[Y], coord[X]] = result
         else:
             self.error("Empty image", "normalize")
-        output.data.astype('uint8')
+        output.data = output.data.astype("uint8")
         return output
 
-    def logTransform(self, c):
+    def logTransform(self):
+        #To speed the process and avoid normalization, the c_value keeps
+        #the result inside the [0, 255] range.
         output = self.copy()
-
-        def logfunc(number):
-            return math.log(number+1)
-        results = numpy.vectorize(logfunc)(output.data)
-        output.data = results
+        print output.minmaxvalue()
+        c_value = 255/numpy.log10(255+1)
+        output.data = numpy.log10(output.data + 2) * c_value
+        print output.minmaxvalue()
         return output
 
     def expTransform(self):
-        pass
+        output = self.copy()
+        c_value = 255 / math.e
+        output.data = numpy.exp(output.data / 255.) * c_value
+        print output.minmaxvalue()
+        return output.normalize(0, 255)
 
     def squareTransform(self):
-        pass
+        output = self.copy()
+        c_value = 255/(255*255)
+        output.data = (output.data * output.data) * c_value
+        return output
 
     def sqrtTransform(self):
+        output = self.copy()
+        c_value = 255/math.sqrt(255)
+        output.data = numpy.sqrt(output.data) * c_value
+        return output
+
+    def constratTransform(self, alpha, beta, gamma):
         pass
 
-    def constratTransform(self):
-        pass
+'''
+25 def _contrast_stretching(e, a, b, alpha, beta, gamma):
+26     if 0 <= e <= a:
+27         return alpha*e
+28     if a < e <= b:
+29         return beta*(e - a) + alpha*a
+30     else:
+31         return gamma*(e - b) + beta*(b - a) + alpha*a
+32 
+33 def contrast_stretching(img, params):
+34     a = params['a']
+35     b = params['b']
+36     alpha = params['alpha']
+37     beta = params['beta']
+38     gamma = params['gamma']
+39 
+40     cs = numpy.vectorize(_contrast_stretching, excluded = ['a','b','alpha','beta','gamma'])
+41     return cs(img, a, b, alpha, beta, gamma)'''

@@ -22,7 +22,6 @@ def main():
     print "Processing..."
 
     image = libimg.NMImage(args["input"])
-    print image.data[:100]
     task = {"1": image.logTransform,
             "2": image.expTransform,
             "3": image.squareTransform,
@@ -31,15 +30,20 @@ def main():
             "6": image.histogram}
 
     if args["task"] == "5":
-        print "Colocar os parametros"
-        #task[args["task"]](127, 0, 255)
+        alpha = float(raw_input("Alpha:"))
+        beta = float(raw_input("Beta:"))
+        gamma = float(raw_input("Gamma:"))
+        output = task[args["task"]](alpha, beta, gamma)
     else:
-        output = task[args["task"]](1)
+        output = task[args["task"]]()
 
-    output = output.normalize(0, 255)
-    print output.data[:100]
-    output.show()
+    image.histogram(title="Input Histogram")
+    output.histogram(title="Output histogram")
+    image.show("Original")
+    output.show("Transformada")
     output.save(output_name)
+
     print "Result saved:", output_name
+    output.showAll()
 
 main()

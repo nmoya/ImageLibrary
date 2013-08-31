@@ -30,10 +30,12 @@ def main():
             "6": image.histogram}
 
     if args["task"] == "5":
+        a = float(raw_input("A: "))
+        b = float(raw_input("B: "))
         alpha = float(raw_input("Alpha:"))
         beta = float(raw_input("Beta:"))
         gamma = float(raw_input("Gamma:"))
-        output = task[args["task"]](alpha, beta, gamma)
+        output = task[args["task"]](a, b, alpha, beta, gamma)
     else:
         output = task[args["task"]]()
 

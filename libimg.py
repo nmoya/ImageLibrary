@@ -70,7 +70,7 @@ class NMImage ():
         from matplotlib import pyplot as plt
         plt.figure()
         plt.hist(self.data.reshape(-1), bins=256)
-        plt.xlim([0,255])
+        plt.xlim([0, 255])
         if len(title) == 0:
             title = self.filename
         plt.title(title, fontsize=14)
@@ -129,7 +129,8 @@ class NMImage ():
         if minval < maxval:
             for p in range(output.size):
                 coord = output.getCoord(p)
-                result = ((a_value * output.getPixel(coord)) - (a_value * minval)) + inf
+                result = ((a_value * output.getPixel(coord)) -
+                         (a_value * minval)) + inf
                 output.data[coord[Y], coord[X]] = result
         else:
             self.error("Empty image", "normalize")
@@ -162,8 +163,21 @@ class NMImage ():
         output.data = numpy.sqrt(output.data) * c_value
         return output
 
-    def constratTransform(self, alpha, beta, gamma):
-        pass
+    def constratTransform(self, a, b, alpha, beta, gamma):
+        output = self.copy()
+        minval, maxval = self.minmaxvalue()
+        for p in range(output.size):
+            coord = output.getCoord(p)
+            value = output.getPixel(coord)
+            if value >= 0 and value <= a:
+                value = alpha * value
+            elif a < value and value <= b:
+                value = beta * (value - a) + (alpha * a)
+            elif b < value and value <= maxval:
+                value = gamma * (value - b) + beta * (b - a) + (alpha * a)
+            output.putPixel(coord, value)
+        return output
+
 
 '''
 25 def _contrast_stretching(e, a, b, alpha, beta, gamma):
@@ -173,13 +187,5 @@ class NMImage ():
 29         return beta*(e - a) + alpha*a
 30     else:
 31         return gamma*(e - b) + beta*(b - a) + alpha*a
-32 
-33 def contrast_stretching(img, params):
-34     a = params['a']
-35     b = params['b']
-36     alpha = params['alpha']
-37     beta = params['beta']
-38     gamma = params['gamma']
-39 
-40     cs = numpy.vectorize(_contrast_stretching, excluded = ['a','b','alpha','beta','gamma'])
-41     return cs(img, a, b, alpha, beta, gamma)'''
+32
+'''

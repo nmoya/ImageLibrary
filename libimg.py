@@ -177,15 +177,3 @@ class NMImage ():
                 value = gamma * (value - b) + beta * (b - a) + (alpha * a)
             output.putPixel(coord, value)
         return output
-
-
-'''
-25 def _contrast_stretching(e, a, b, alpha, beta, gamma):
-26     if 0 <= e <= a:
-27         return alpha*e
-28     if a < e <= b:
-29         return beta*(e - a) + alpha*a
-30     else:
-31         return gamma*(e - b) + beta*(b - a) + alpha*a
-32
-'''

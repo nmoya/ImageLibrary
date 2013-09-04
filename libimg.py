@@ -176,4 +176,4 @@ class NMImage ():
             elif b < value and value <= maxval:
                 value = gamma * (value - b) + beta * (b - a) + (alpha * a)
             output.putPixel(coord, value)
-        return output
+        return output.normalize(0, 255)

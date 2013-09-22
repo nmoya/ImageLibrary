@@ -8,9 +8,9 @@ import argparse
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Assignment #1')
-    parser.add_argument('-t', '--task', help='Task: [1,2,3,4,5]',
-                        required=True)
+    parser = argparse.ArgumentParser(description='Assignment #2')
+    parser.add_argument('-t', '--task', help='Task: [1,2]: 1-Ordered Half \
+                        Toning; 2-Difused Half Toning', required=True)
     parser.add_argument('-i', '--input', help='Input image', required=True)
     parser.add_argument('-o', '--output', help='Output image. result.pgm if \
                         not specified', required=False)
@@ -21,31 +21,18 @@ def main():
 
     print "Processing..."
 
-    image = libimg.NMImage(args["input"])
-    task = {"1": image.logTransform,
-            "2": image.expTransform,
-            "3": image.squareTransform,
-            "4": image.sqrtTransform,
-            "5": image.constratTransform,
-            "6": image.histogram}
+    image = libimg.NMImage(filename=args["input"])
+    task = {"1": image.halfToningOrdered,
+            "2": image.halfToningDifuse}
 
-    if args["task"] == "5":
-        a = float(raw_input("A: "))
-        b = float(raw_input("B: "))
-        alpha = float(raw_input("Alpha:"))
-        beta = float(raw_input("Beta:"))
-        gamma = float(raw_input("Gamma:"))
-        output = task[args["task"]](a, b, alpha, beta, gamma)
-    else:
-        output = task[args["task"]]()
+    output = task[args["task"]]()
 
-    image.histogram(title="Input Histogram")
-    output.histogram(title="Output histogram")
+
     image.show("Original")
-    output.show("Transformada")
+    output.show("Resultado")
     output.save(output_name)
 
     print "Result saved:", output_name
-    output.showAll()
+    image.showAll()
 
 main()

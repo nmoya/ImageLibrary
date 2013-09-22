@@ -9,12 +9,17 @@ X = 1
 
 
 class NMImage ():
-    def __init__(self, file_location=''):
-        self.filename = file_location
-        self.sizex = 0
-        self.sizey = 0
+    def __init__(self, **kwargs):
+        self.filename = kwargs.get("filename", '')
+        self.sizex = kwargs.get("sizex", 0)
+        self.sizey = kwargs.get("sizey", 0)
         self.maxval = 255
-        self.data = self.open()
+        if self.filename == '':
+            self.data = numpy.zeros(self.sizex * self.sizey)
+            self.data = self.data.astype("float64")
+            self.data = self.data.reshape(self.sizex, self.sizey)
+        else:
+            self.data = self.open()
         self.size = self.sizey * self.sizex
 
     def __repr__(self):
@@ -53,7 +58,7 @@ class NMImage ():
         from matplotlib import pyplot as plt
         import matplotlib.cm as cm
         plt.figure()
-        if self.filename.endswith("pgm"):
+        if self.filename.endswith("pgm") or len(self.filename) == 0:
             plt.imshow(self.data, cmap=cm.gray)
         else:
             plt.imshow(self.data)
@@ -77,6 +82,14 @@ class NMImage ():
 
     def copy(self):
         return copy.deepcopy(self)
+
+    def validCoord(self, coord):
+        if coord[X] < 0 or coord[Y] < 0:
+            return False
+        if coord[X] > (self.sizex-1) or coord[Y] > (self.sizey-1):
+            return False
+
+        return True
 
     def minmaxvalue(self):
         minval = self.data[0][0]
@@ -125,7 +138,7 @@ class NMImage ():
         output = self.copy()
         minval, maxval = output.minmaxvalue()
         output.maxval = sup
-        a_value = (sup-inf) / ((maxval - minval) * 1.0)
+        a_value = (sup-inf) / ((maxval * 1.0 - minval * 1.0) * 1.0)
         if minval < maxval:
             for p in range(output.size):
                 coord = output.getCoord(p)
@@ -134,6 +147,68 @@ class NMImage ():
                 output.data[coord[Y], coord[X]] = result
         else:
             self.error("Empty image", "normalize")
+        return output
+
+    def halfToningOrdered(self):
+        normalized_img = self.normalize(0, 9)
+        output = NMImage(sizex=self.sizex*3, sizey=self.sizey*3)
+
+        threshold_matrix = [[0, 0, 0], [-1, 0, 1], [0, 1, 2], [1, 0, 3],
+                            [1, -1, 4], [-1, 1, 5], [-1, -1, 6], [0, -1, 8]]
+
+        for i in range(self.size):
+            coord = normalized_img.getCoord(i)
+            value = normalized_img.getPixel(coord)
+
+            for neighbour in threshold_matrix:
+                new_coord = (coord[X] + neighbour[X], coord[Y] + neighbour[Y])
+                if self.validCoord(new_coord):
+                    if value < neighbour[2]:
+                        output.putPixel(new_coord, 0)
+                    else:
+                        output.putPixel(new_coord, 255)
+
+        return output
+
+    def halfToningDifuse(self):
+        output = self.copy()
+
+        neighbourhood = [[1, 0, 0.435], [-1, -1, 0.1875],
+                         [0, 1, 0.3125], [1, 1, 0.0625]]
+
+        for y in range(self.sizey):
+            if y % 2 == 0:
+                x = 0
+            else:
+                x = self.sizex-1
+            while True:
+                if y % 2 == 0:
+                    if x == self.sizex:
+                        break
+                else:
+                    if x == -1:
+                        break
+
+                original_value = self.getPixel((x, y))
+                if original_value > 128:
+                    new_value = 255
+                else:
+                    new_value = 0
+                output.putPixel((x, y), new_value)
+
+                erro = original_value - new_value * 255
+                for neighbour in neighbourhood:
+                    new_coord = (x + neighbour[X], y + neighbour[Y])
+                    if self.validCoord(new_coord):
+                        coef = neighbour[2]
+                        previous_value = self.getPixel(new_coord)
+                        self.putPixel(new_coord, (previous_value + coef * erro))
+
+                if y % 2 == 0:
+                    x += 1
+                else:
+                    x -= 1
+
         return output
 
     def logTransform(self):

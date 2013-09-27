@@ -178,7 +178,7 @@ class NMImage ():
         neighbourhood = [[1, 0, 0.435], [-1, -1, 0.1875],
                          [0, 1, 0.3125], [1, 1, 0.0625]]
 
-        '''for y in range(output.sizey):
+        for y in range(output.sizey):
             if y % 2 == 0:
                 x = -1
             else:
@@ -206,8 +206,10 @@ class NMImage ():
                         coef = neighbour[2]
                         previous_value = output.getPixel(new_coord)
                         output.putPixel(new_coord,
-                                        (previous_value + (coef * erro)))'''
-        for p in range(output.size):
+                                        (previous_value + (coef * erro)))
+
+        #Regular scan
+        '''for p in range(output.size):
             coord = output.getCoord(p)
             original_value = output.getPixel(coord)
             if original_value > 128:
@@ -222,7 +224,7 @@ class NMImage ():
                     coef = neighbour[2]
                     previous_value = output.getPixel(new_coord)
                     output.putPixel(new_coord,
-                                    (previous_value + (coef * erro)))
+                                    (previous_value + (coef * erro)))'''
 
         return output
 

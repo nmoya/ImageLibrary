@@ -4,8 +4,8 @@ import re
 import math
 import copy
 
-Y = 0
-X = 1
+X = 0
+Y = 1
 
 
 class NMImage ():
@@ -20,7 +20,7 @@ class NMImage ():
             self.data = self.data.reshape(self.sizex, self.sizey)
         else:
             self.data = self.open()
-        self.size = self.sizey * self.sizex
+        self.size = (self.sizey * self.sizex)
 
     def __repr__(self):
         name = self.filename.split("/")[-1]
@@ -43,15 +43,15 @@ class NMImage ():
         io.imsave(name, self.data)
 
     def getPixel(self, coord):
-        return self.data[coord[Y], coord[X]]
+        return self.data[coord[X], coord[Y]]
 
     def putPixel(self, coord, value):
-        self.data[coord[Y], coord[X]] = value
+        self.data[coord[X], coord[Y]] = value
 
     def getCoord(self, position):
         #http://cl.ly/image/380z3r3y1H19
-        x = (position % (self.sizex*self.sizey)) % self.sizex
-        y = (position % (self.sizex*self.sizey)) / self.sizex
+        x = (position % (self.size)) % self.sizex
+        y = (position % (self.size)) / self.sizex
         return (x, y)
 
     def show(self, title=''):
@@ -84,12 +84,13 @@ class NMImage ():
         return copy.deepcopy(self)
 
     def validCoord(self, coord):
-        if coord[X] < 0 or coord[Y] < 0:
+        x = coord[X]
+        y = coord[Y]
+        if (x >= 0) and (x < self.sizex) and \
+           (y >= 0) and (y < self.sizey):
+            return True
+        else:
             return False
-        if coord[X] > (self.sizex-1) or coord[Y] > (self.sizey-1):
-            return False
-
-        return True
 
     def minmaxvalue(self):
         minval = self.data[0][0]
@@ -144,7 +145,7 @@ class NMImage ():
                 coord = output.getCoord(p)
                 result = ((a_value * output.getPixel(coord)) -
                          (a_value * minval)) + inf
-                output.data[coord[Y], coord[X]] = result
+                output.putPixel(coord, result)
         else:
             self.error("Empty image", "normalize")
         return output
@@ -153,8 +154,9 @@ class NMImage ():
         normalized_img = self.normalize(0, 9)
         output = NMImage(sizex=self.sizex*3, sizey=self.sizey*3)
 
-        threshold_matrix = [[0, 0, 0], [-1, 0, 1], [0, 1, 2], [1, 0, 3],
-                            [1, -1, 4], [-1, 1, 5], [-1, -1, 6], [0, -1, 8]]
+        threshold_matrix = [[0, -1, 8], [1, 1, 7], [-1, -1, 6],
+                            [-1, 1, 5], [1, -1, 4], [1, 0, 3],
+                            [0, 1, 2], [-1, 0, 1], [0, 0, 0]]
 
         for i in range(self.size):
             coord = normalized_img.getCoord(i)
@@ -162,12 +164,12 @@ class NMImage ():
 
             for neighbour in threshold_matrix:
                 new_coord = (coord[X] + neighbour[X], coord[Y] + neighbour[Y])
-                if self.validCoord(new_coord):
+                new_coord = (new_coord[0]*3, new_coord[1]*3)
+                if output.validCoord(new_coord):
                     if value < neighbour[2]:
                         output.putPixel(new_coord, 0)
                     else:
                         output.putPixel(new_coord, 255)
-
         return output
 
     def halfToningDifuse(self):
@@ -176,38 +178,51 @@ class NMImage ():
         neighbourhood = [[1, 0, 0.435], [-1, -1, 0.1875],
                          [0, 1, 0.3125], [1, 1, 0.0625]]
 
-        for y in range(self.sizey):
+        '''for y in range(output.sizey):
             if y % 2 == 0:
-                x = 0
+                x = -1
             else:
-                x = self.sizex-1
+                x = output.sizex
             while True:
                 if y % 2 == 0:
-                    if x == self.sizex:
+                    x += 1
+                    if x == output.sizex:
                         break
                 else:
+                    x -= 1
                     if x == -1:
                         break
 
-                original_value = self.getPixel((x, y))
+                original_value = output.getPixel((x, y))
                 if original_value > 128:
-                    new_value = 255
-                else:
                     new_value = 0
-                output.putPixel((x, y), new_value)
+                else:
+                    new_value = 1
 
                 erro = original_value - new_value * 255
                 for neighbour in neighbourhood:
                     new_coord = (x + neighbour[X], y + neighbour[Y])
-                    if self.validCoord(new_coord):
+                    if output.validCoord(new_coord):
                         coef = neighbour[2]
-                        previous_value = self.getPixel(new_coord)
-                        self.putPixel(new_coord, (previous_value + coef * erro))
+                        previous_value = output.getPixel(new_coord)
+                        output.putPixel(new_coord,
+                                        (previous_value + (coef * erro)))'''
+        for p in range(output.size):
+            coord = output.getCoord(p)
+            original_value = output.getPixel(coord)
+            if original_value > 128:
+                new_value = 0
+            else:
+                new_value = 1
 
-                if y % 2 == 0:
-                    x += 1
-                else:
-                    x -= 1
+            erro = original_value - new_value * 255
+            for neighbour in neighbourhood:
+                new_coord = (coord[X] + neighbour[X], coord[Y] + neighbour[Y])
+                if self.validCoord(new_coord):
+                    coef = neighbour[2]
+                    previous_value = output.getPixel(new_coord)
+                    output.putPixel(new_coord,
+                                    (previous_value + (coef * erro)))
 
         return output
 

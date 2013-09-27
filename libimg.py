@@ -154,9 +154,9 @@ class NMImage ():
         normalized_img = self.normalize(0, 9)
         output = NMImage(sizex=self.sizex*3, sizey=self.sizey*3)
 
-        threshold_matrix = [[0, -1, 8], [1, 1, 7], [-1, -1, 6],
-                            [-1, 1, 5], [1, -1, 4], [1, 0, 3],
-                            [0, 1, 2], [-1, 0, 1], [0, 0, 0]]
+        threshold_matrix = [[0, 0, 0], [-1, 0, 1], [0, 1, 2],
+                            [1, 0, 3], [1, -1, 4], [-1, 1, 5],
+                            [-1, -1, 6], [1, 1, 7], [0, -1, 8]]
 
         for i in range(self.size):
             coord = normalized_img.getCoord(i)

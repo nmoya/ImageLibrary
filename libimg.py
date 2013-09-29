@@ -158,18 +158,23 @@ class NMImage ():
                             [1, 0, 3], [1, -1, 4], [-1, 1, 5],
                             [-1, -1, 6], [1, 1, 7], [0, -1, 8]]
 
-        for i in range(self.size):
-            coord = normalized_img.getCoord(i)
-            value = normalized_img.getPixel(coord)
+        for y in range(self.sizey):
+            for x in range(self.sizex):
+                coord = (x, y)
+                value = normalized_img.getPixel(coord)
 
-            for neighbour in threshold_matrix:
-                new_coord = (coord[X] + neighbour[X], coord[Y] + neighbour[Y])
-                new_coord = (new_coord[0]*3, new_coord[1]*3)
-                if output.validCoord(new_coord):
-                    if value <= neighbour[2]:
-                        output.putPixel(new_coord, 0)
-                    else:
-                        output.putPixel(new_coord, 255)
+                counter = 0
+                for new_y in range(y*3, (y*3)+3):
+                    for new_x in range(x*3, (x*3)+3):
+                        neighbour = threshold_matrix[counter]
+                        new_coord = (new_x + neighbour[X],
+                                     new_y + neighbour[Y])
+                        if output.validCoord(new_coord):
+                            if value <= neighbour[2]:
+                                output.putPixel(new_coord, 0.)
+                            else:
+                                output.putPixel(new_coord, 255.)
+                        counter += 1
         return output
 
     def halfToningDifuse(self, zigzag):

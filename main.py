@@ -14,6 +14,9 @@ def main():
     parser.add_argument('-i', '--input', help='Input image', required=True)
     parser.add_argument('-o', '--output', help='Output image. result.pgm if \
                         not specified', required=False)
+    parser.add_argument('-s', '--scan', help='1: Regular, 2: ZigZag',
+                        required=True)
+
     args = vars(parser.parse_args())
     output_name = "result.pgm"
     if args["output"]:
@@ -22,11 +25,13 @@ def main():
     print "Processing..."
 
     image = libimg.NMImage(filename=args["input"])
-    task = {"1": image.halfToningOrdered,
-            "2": image.halfToningDifuse}
+    #task = {"1": image.halfToningOrdered,
+            #"2": image.halfToningDifuse()}
 
-    output = task[args["task"]]()
-
+    if args["task"] == "1":
+        output = image.halfToningOrdered()
+    else:
+        output = image.halfToningDifuse(args["scan"])
 
     image.show("Original")
     output.show("Resultado")

@@ -166,65 +166,40 @@ class NMImage ():
                 new_coord = (coord[X] + neighbour[X], coord[Y] + neighbour[Y])
                 new_coord = (new_coord[0]*3, new_coord[1]*3)
                 if output.validCoord(new_coord):
-                    if value < neighbour[2]:
+                    if value <= neighbour[2]:
                         output.putPixel(new_coord, 0)
                     else:
                         output.putPixel(new_coord, 255)
         return output
 
-    def halfToningDifuse(self):
-        output = self.copy()
-
+    def halfToningDifuse(self, zigzag):
+        output = NMImage(sizex=self.sizex, sizey=self.sizey)
+        copy = self.copy()
         neighbourhood = [[1, 0, 0.435], [-1, -1, 0.1875],
                          [0, 1, 0.3125], [1, 1, 0.0625]]
 
         for y in range(output.sizey):
-            if y % 2 == 0:
-                x = -1
-            else:
-                x = output.sizex
-            while True:
-                if y % 2 == 0:
-                    x += 1
-                    if x == output.sizex:
-                        break
-                else:
-                    x -= 1
-                    if x == -1:
-                        break
+            x_interval = range(0, self.sizex)
+            if y % 2 == 1 and zigzag == 2:
+                x_interval = reversed(x_interval)
 
-                original_value = output.getPixel((x, y))
-                if original_value > 128:
-                    new_value = 0
+            for x in x_interval:
+                original_value = copy.getPixel((x, y))
+                error = 0
+                if original_value > 127:
+                    output.putPixel((x, y), 255.)
+                    error = original_value - 255.
                 else:
-                    new_value = 1
+                    output.putPixel((x, y), 0.)
+                    error = original_value
 
-                erro = original_value - new_value * 255
                 for neighbour in neighbourhood:
                     new_coord = (x + neighbour[X], y + neighbour[Y])
                     if output.validCoord(new_coord):
                         coef = neighbour[2]
-                        previous_value = output.getPixel(new_coord)
-                        output.putPixel(new_coord,
-                                        (previous_value + (coef * erro)))
-
-        #Regular scan
-        '''for p in range(output.size):
-            coord = output.getCoord(p)
-            original_value = output.getPixel(coord)
-            if original_value > 128:
-                new_value = 0
-            else:
-                new_value = 1
-
-            erro = original_value - new_value * 255
-            for neighbour in neighbourhood:
-                new_coord = (coord[X] + neighbour[X], coord[Y] + neighbour[Y])
-                if self.validCoord(new_coord):
-                    coef = neighbour[2]
-                    previous_value = output.getPixel(new_coord)
-                    output.putPixel(new_coord,
-                                    (previous_value + (coef * erro)))'''
+                        previous_value = copy.getPixel(new_coord)
+                        copy.putPixel(new_coord,
+                                      (previous_value + (coef * error)))
 
         return output
 

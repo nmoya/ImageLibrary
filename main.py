@@ -9,16 +9,14 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(description='Assignment #2')
-    parser.add_argument('-t', '--task', help='Task: [1,2]: 1-Ordered Half \
-                        Toning; 2-Difused Half Toning', required=True)
+    parser.add_argument('-t', '--task', help='Task [1]: Segment image',
+                        required=False)
     parser.add_argument('-i', '--input', help='Input image', required=True)
-    parser.add_argument('-o', '--output', help='Output image. result.pgm if \
+    parser.add_argument('-o', '--output', help='Output image. result.pbm if \
                         not specified', required=False)
-    parser.add_argument('-s', '--scan', help='1: Regular, 2: ZigZag',
-                        required=True)
 
     args = vars(parser.parse_args())
-    output_name = "result.pgm"
+    output_name = "result.pbm"
     if args["output"]:
         output_name = args["output"]
 
@@ -28,14 +26,11 @@ def main():
     #task = {"1": image.halfToningOrdered,
             #"2": image.halfToningDifuse()}
 
-    if args["task"] == "1":
-        output = image.halfToningOrdered()
-    else:
-        output = image.halfToningDifuse(args["scan"])
-
+    output = image.morphologySegmentation()
     image.show("Original")
-    output.show("Resultado")
-    output.save(output_name)
+    if output is not None:
+        #output.show("Resultado")
+        output.save(output_name)
 
     print "Result saved:", output_name
     image.showAll()

@@ -1,4 +1,5 @@
 import skimage.io as io
+import skimage.morphology as morphology
 import numpy
 import re
 import math
@@ -110,45 +111,12 @@ class NMImage ():
         sys.exit(1)
 
 #######################################################
-#
-#
-#                   NOT IO
-#
-#
+#                                                     #
+#                                                     #
+#                   NOT IO                            #
+#                                                     #
+#                                                     #
 #######################################################
-
-    def binarize(self, threshold, min, max):
-        output = self.copy()
-        for i in range(self.size):
-            coord = output.getCoord(i)
-            if output.getPixel(coord) > threshold:
-                output.putPixel(coord, max)
-            else:
-                output.putPixel(coord, min)
-        return output
-
-    def invert(self):
-        output = self.copy()
-        for i in range(self.size):
-            coord = output.getCoord(i)
-            value = output.getPixel(coord)
-            output.putPixel(coord, output.maxval - value)
-        return output
-
-    def normalize(self, inf, sup):
-        output = self.copy()
-        minval, maxval = output.minmaxvalue()
-        output.maxval = sup
-        a_value = (sup-inf) / ((maxval * 1.0 - minval * 1.0) * 1.0)
-        if minval < maxval:
-            for p in range(output.size):
-                coord = output.getCoord(p)
-                result = ((a_value * output.getPixel(coord)) -
-                         (a_value * minval)) + inf
-                output.putPixel(coord, result)
-        else:
-            self.error("Empty image", "normalize")
-        return output
 
     def halfToningOrdered(self):
         normalized_img = self.normalize(0, 9)
@@ -185,8 +153,9 @@ class NMImage ():
 
         for y in range(output.sizey):
             x_interval = range(0, self.sizex)
-            if y % 2 == 1 and zigzag == 2:
+            if y % 2 == 1 and zigzag == "2":
                 x_interval = reversed(x_interval)
+                print x_interval
 
             for x in x_interval:
                 original_value = copy.getPixel((x, y))
@@ -206,6 +175,87 @@ class NMImage ():
                         copy.putPixel(new_coord,
                                       (previous_value + (coef * error)))
 
+        return output
+
+    def morphElement(self, size):
+        sizex = size[0]
+        sizey = size[1]
+        return numpy.reshape(numpy.array([1 for i in range(sizex*sizey)]),
+                             (sizex, sizey))
+
+    def morphologySegmentation(self):
+        step12 = self.binarize(0, 0, 1)
+        element12 = self.morphElement((100, 1))
+        step12.data = morphology.binary_opening(self.data, element12)
+        #step12.show("Step 1-2")
+
+        step34 = self.binarize(0, 0, 1)
+        element34 = self.morphElement((1, 200))
+        step34.data = morphology.binary_opening(self.data, element34)
+        #step34.show("Step 3-4")
+
+        step5 = self.copy()
+        for i in range(step5.size):
+            coord = step5.getCoord(i)
+            value12 = step12.getPixel(coord)
+            value34 = step34.getPixel(coord)
+            step5.putPixel(coord, (value12 and value34))
+        step5.show("Step 5")
+
+        element6 = self.morphElement((30, 1))
+        step6 = self.copy()
+        step6.data = morphology.binary_closing(step5.data, element34)
+        step6.show("Step 6")
+
+        step6.data = step6.data.astype("int")
+        labels = self.copy()
+        labels.data = labels.data.astype("int")
+        labels.data = morphology.label(step6.data, 4, 0)
+        labels.normalize(0, 255).show("Normalized labels")
+
+        #Retrieve the retangles from the label image       
+
+        return step5
+
+#######################################################
+#                                                     #
+#                                                     #
+#                   Transformations                   #
+#                                                     #
+#                                                     #
+#######################################################
+
+    def binarize(self, threshold, min, max):
+        output = self.copy()
+        for i in range(self.size):
+            coord = output.getCoord(i)
+            if output.getPixel(coord) > threshold:
+                output.putPixel(coord, max)
+            else:
+                output.putPixel(coord, min)
+        return output
+
+    def invert(self):
+        output = self.copy()
+        for i in range(self.size):
+            coord = output.getCoord(i)
+            value = output.getPixel(coord)
+            output.putPixel(coord, output.maxval - value)
+        return output
+
+    def normalize(self, inf, sup):
+        output = self.copy()
+        minval, maxval = output.minmaxvalue()
+        output.maxval = sup
+        a_value = (sup-inf) / ((maxval * 1.0 - minval * 1.0) * 1.0)
+        if minval < maxval:
+            for p in range(output.size):
+                coord = output.getCoord(p)
+                result = ((a_value * output.getPixel(coord)) -
+                         (a_value * minval)) + inf
+                output.putPixel(coord, result)
+        else:
+            self.error("Empty image", "normalize")
         return output
 
     def logTransform(self):

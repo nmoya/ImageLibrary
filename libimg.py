@@ -29,7 +29,8 @@ class NMImage ():
 
     def open(self):
         #http://flockhart.virtualave.net/RBIF0100/regexp.html
-        io.use_plugin("freeimage")
+        if not self.filename.endswith(".pbm"):
+            io.use_plugin("freeimage")
         self.data = io.imread(self.filename)
         self.data = self.data.astype("float64")
         self.sizex = self.data.shape[0]
@@ -184,21 +185,23 @@ class NMImage ():
                              (sizex, sizey))
 
     def morphologySegmentation(self):
-        step12 = self.binarize(0, 0, 1)
+        step12 = self.binarize()
+        step12 = step12.invert()
         element12 = self.morphElement((100, 1))
         step12.data = morphology.binary_opening(self.data, element12)
-        #step12.show("Step 1-2")
+        step12.show("Step 1-2")
 
-        step34 = self.binarize(0, 0, 1)
+        step34 = self.binarize()
         element34 = self.morphElement((1, 200))
         step34.data = morphology.binary_opening(self.data, element34)
-        #step34.show("Step 3-4")
+        step34.show("Step 3-4")
 
         step5 = self.copy()
         for i in range(step5.size):
             coord = step5.getCoord(i)
             value12 = step12.getPixel(coord)
-            value34 = step34.getPixel(coord)
+            value34 = step34.
+            getPixel(coord)
             step5.putPixel(coord, (value12 and value34))
         step5.show("Step 5")
 
@@ -213,7 +216,7 @@ class NMImage ():
         labels.data = morphology.label(step6.data, 4, 0)
         labels.normalize(0, 255).show("Normalized labels")
 
-        #Retrieve the retangles from the label image       
+        #Retrieve the retangles from the label image
 
         return step5
 
@@ -225,7 +228,13 @@ class NMImage ():
 #                                                     #
 #######################################################
 
-    def binarize(self, threshold, min, max):
+    def binarize(self):
+        output = self.copy()
+        output.data = (output.data == 0).astype("uint8")
+        output.maxval = 1
+        return output
+
+    def threshold(self, threshold, min, max):
         output = self.copy()
         for i in range(self.size):
             coord = output.getCoord(i)
@@ -233,6 +242,7 @@ class NMImage ():
                 output.putPixel(coord, max)
             else:
                 output.putPixel(coord, min)
+        output.maxval = max
         return output
 
     def invert(self):

@@ -200,7 +200,7 @@ class NMImage ():
         for i in range(step5.size):
             coord = step5.getCoord(i)
             value12 = step12.getPixel(coord)
-            value34 = step34.
+            value34 = step34.getPixel(coord)
             getPixel(coord)
             step5.putPixel(coord, (value12 and value34))
         step5.show("Step 5")

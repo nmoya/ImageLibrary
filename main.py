@@ -27,7 +27,7 @@ def main():
             #"2": image.halfToningDifuse()}
 
     output = image.morphologySegmentation()
-    image.show("Original")
+    #image.show("Original")
     if output is not None:
         #output.show("Resultado")
         output.save(output_name)

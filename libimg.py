@@ -1,3 +1,9 @@
+from __future__ import division
+from skimage.measure import regionprops
+from matplotlib import pyplot as plt
+from rectangles import *
+import matplotlib.patches as mpatches
+import matplotlib.cm as cm
 import skimage.io as io
 import skimage.morphology as morphology
 import numpy
@@ -57,10 +63,8 @@ class NMImage ():
         return (x, y)
 
     def show(self, title=''):
-        from matplotlib import pyplot as plt
-        import matplotlib.cm as cm
         plt.figure()
-        if self.filename.endswith("pgm") or len(self.filename) == 0:
+        if self.filename.endswith("pgm") or self.filename.endswith("pbm"):
             plt.imshow(self.data, cmap=cm.gray)
         else:
             plt.imshow(self.data)
@@ -68,6 +72,15 @@ class NMImage ():
         if len(title) == 0:
             title = self.filename
         plt.title(title, fontsize=14)
+
+    def showLabelBB(self, rectangleList):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(self.data, cmap=cm.gray)
+        for r in rectangleList:
+            rect = mpatches.Rectangle((r.pos_x, r.pos_y), r.width, r.height,
+                                      fill=False, edgecolor='red', linewidth=2)
+            ax.add_patch(rect)
 
     def showAll(self):
         from matplotlib import pyplot as plt
@@ -178,46 +191,66 @@ class NMImage ():
 
         return output
 
-    def morphElement(self, size):
-        sizex = size[0]
-        sizey = size[1]
-        return numpy.reshape(numpy.array([1 for i in range(sizex*sizey)]),
-                             (sizex, sizey))
+    def morphElement(self, width, height):
+        return morphology.rectangle(width, height)
 
     def morphologySegmentation(self):
+        rectangleList = []
         step12 = self.binarize()
-        step12 = step12.invert()
-        element12 = self.morphElement((100, 1))
-        step12.data = morphology.binary_opening(self.data, element12)
-        step12.show("Step 1-2")
+        element12 = self.morphElement(100, 1)
+        step12.data = morphology.binary_closing(step12.data, element12)
+        #step12.show("Step 1-2")
 
         step34 = self.binarize()
-        element34 = self.morphElement((1, 200))
-        step34.data = morphology.binary_opening(self.data, element34)
-        step34.show("Step 3-4")
+        element34 = self.morphElement(1, 200)
+        step34.data = morphology.binary_closing(step34.data, element34)
+        #step34.show("Step 3-4")
 
         step5 = self.copy()
-        for i in range(step5.size):
-            coord = step5.getCoord(i)
-            value12 = step12.getPixel(coord)
-            value34 = step34.getPixel(coord)
-            getPixel(coord)
-            step5.putPixel(coord, (value12 and value34))
-        step5.show("Step 5")
+        step5.data = numpy.logical_and(step12.data, step34.data)
+        #step5.show("Step 5")
 
-        element6 = self.morphElement((30, 1))
-        step6 = self.copy()
-        step6.data = morphology.binary_closing(step5.data, element34)
+        element6 = self.morphElement(1, 30)
+        step6 = step5.copy()
+        step6.data = morphology.binary_closing(step5.data, element6)
         step6.show("Step 6")
 
-        step6.data = step6.data.astype("int")
-        labels = self.copy()
+        labels = step6.copy()
         labels.data = labels.data.astype("int")
-        labels.data = morphology.label(step6.data, 4, 0)
-        labels.normalize(0, 255).show("Normalized labels")
+        labels.data = morphology.label(labels.data, 4, 0)
+        print "Number of Labels: ", labels.data.max()
 
         #Retrieve the retangles from the label image
+        binary_input = self.binarize()
+        for region in regionprops(labels.data, ['BoundingBox', "label"]):
 
+            rect_y, rect_x, rect_y_2, rect_x_2 = region['BoundingBox']
+            width = rect_x_2 - rect_x
+            height = rect_y_2 - rect_y
+            patch = binary_input.data[rect_y:rect_y_2+1, rect_x:rect_x_2+1]
+            area = (width+1) * (height+1)
+            black = patch.sum()
+            horizontal = 0
+            vertical = 0
+            previous = 0
+            for lin in range(len(patch)):
+                for col in range(len(patch[0])):
+                    if patch[lin, col] != previous:
+                        horizontal += 1
+                    previous = patch[lin, col]
+            previous = 0
+            for col in range(len(patch[0])):
+                for lin in range(len(patch)):
+                    if patch[lin, col] != previous:
+                        vertical += 1
+                    previous = patch[lin, col]
+
+            #print black / area, horizontal / area, vertical / area
+            rectangleList.append(Rectangle(rect_x, rect_y, width, height,
+                                 patch, black, vertical, horizontal, area,
+                                 region["Label"]))
+
+        labels.showLabelBB(rectangleList)
         return step5
 
 #######################################################
@@ -247,6 +280,7 @@ class NMImage ():
 
     def invert(self):
         output = self.copy()
+        output.maxval = self.data.max()
         for i in range(self.size):
             coord = output.getCoord(i)
             value = output.getPixel(coord)

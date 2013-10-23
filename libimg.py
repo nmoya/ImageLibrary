@@ -1,7 +1,9 @@
 from __future__ import division
 from skimage.measure import regionprops
+from skimage.color import label2rgb
 from matplotlib import pyplot as plt
 from rectangles import *
+from scipy import ndimage
 import matplotlib.patches as mpatches
 import matplotlib.cm as cm
 import skimage.io as io
@@ -73,14 +75,21 @@ class NMImage ():
             title = self.filename
         plt.title(title, fontsize=14)
 
-    def showLabelBB(self, rectangleList):
+    def showBBoxes(self, rectangleList):
+        COLORS = ["yellow", "red"]
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.imshow(self.data, cmap=cm.gray)
         for r in rectangleList:
             rect = mpatches.Rectangle((r.pos_x, r.pos_y), r.width, r.height,
-                                      fill=False, edgecolor='red', linewidth=2)
+                                      fill=False, edgecolor=COLORS[r.label],
+                                      linewidth=2)
             ax.add_patch(rect)
+
+    def showLabelImage(self, labelImage):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(label2rgb(labelImage.data, image=self.data))
 
     def showAll(self):
         from matplotlib import pyplot as plt
@@ -131,6 +140,98 @@ class NMImage ():
 #                                                     #
 #                                                     #
 #######################################################
+
+    def erode(self, kernel):
+        kernel_sum = kernel.sum()
+        output = NMImage(sizex=self.sizex, sizy=self.sizey)
+        convolved = numpy.empty_like(self.data, dtype=numpy.uint)
+
+        convolved = ndimage.convolve(self.data, kernel, mode='constant',
+                                     cval=1)
+        output.data = numpy.equal(convolved, kernel_sum)
+        return output
+
+    def dilation(self, kernel):
+        output = NMImage(sizex=self.sizex, sizy=self.sizey)
+        convolved = numpy.empty_like(self.data, dtype=numpy.uint)
+        convolved = ndimage.convolve(self.data, kernel, mode='constant',
+                                     cval=0)
+        output.data = numpy.not_equal(convolved, 0)
+        return output
+
+    def closing(self, kernel):
+        dilatated = self.dilation(kernel)
+        return dilatated.erode(kernel)
+
+    def opening(self, kernel):
+        eroded = self.erode(kernel)
+        return eroded.dilation(kernel)
+
+    def morphElement(self, width, height):
+        return morphology.rectangle(width, height)
+
+    def morphologySegmentation(self):
+        rectangleList = []
+        step12 = self.binarize()
+        element12 = self.morphElement(100, 1)
+        step12 = step12.closing(element12)
+        #step12.show("Step 1-2")
+
+        step34 = self.binarize()
+        element34 = self.morphElement(1, 200)
+        step34 = step34.closing(element34)
+        #step34.show("Step 3-4")
+
+        step5 = self.copy()
+        step5.data = numpy.logical_and(step12.data, step34.data)
+        #step5.show("Step 5")
+
+        step6 = step5.copy()
+        element6 = self.morphElement(1, 30)
+        step6 = step6.closing(element6)
+        #step6.show("Step 6")
+
+        labels = step6.copy()
+        #labels.data = labels.data.astype("int")
+        labels.data = morphology.label(labels.data, 4, 0)
+        print "Number of Labels: ", labels.data.max()
+
+        #Retrieve the retangles from the label image
+        binary_input = self.binarize()
+        for region in regionprops(labels.data, ['BoundingBox', "label"]):
+
+            rect_y, rect_x, rect_y_2, rect_x_2 = region['BoundingBox']
+            width = rect_x_2 - rect_x
+            height = rect_y_2 - rect_y
+            patch = binary_input.data[rect_y:rect_y_2+1, rect_x:rect_x_2+1]
+
+            horizontal, vertical, previous = 0, 0, 0
+            area, black = patch.size, patch.sum()
+
+            for lin in range(len(patch)):
+                for col in range(len(patch[0])):
+                    if patch[lin, col] != previous:
+                        horizontal += 1
+                    previous = patch[lin, col]
+            previous = 0
+            for col in range(len(patch[0])):
+                for lin in range(len(patch)):
+                    if patch[lin, col] != previous:
+                        vertical += 1
+                    previous = patch[lin, col]
+
+            if black / area > 0.18 or \
+               math.fabs(horizontal / area-vertical / area) > 0.005:
+                rectangleList.append(Rectangle(rect_x, rect_y, width, height,
+                                     patch, black, vertical, horizontal, area,
+                                     1))
+            else:
+                rectangleList.append(Rectangle(rect_x, rect_y, width, height,
+                                     patch, black, vertical, horizontal, area,
+                                     0))
+                #print black / area, horizontal / area, vertical / area
+
+        self.showBBoxes(rectangleList)
 
     def halfToningOrdered(self):
         normalized_img = self.normalize(0, 9)
@@ -190,68 +291,6 @@ class NMImage ():
                                       (previous_value + (coef * error)))
 
         return output
-
-    def morphElement(self, width, height):
-        return morphology.rectangle(width, height)
-
-    def morphologySegmentation(self):
-        rectangleList = []
-        step12 = self.binarize()
-        element12 = self.morphElement(100, 1)
-        step12.data = morphology.binary_closing(step12.data, element12)
-        #step12.show("Step 1-2")
-
-        step34 = self.binarize()
-        element34 = self.morphElement(1, 200)
-        step34.data = morphology.binary_closing(step34.data, element34)
-        #step34.show("Step 3-4")
-
-        step5 = self.copy()
-        step5.data = numpy.logical_and(step12.data, step34.data)
-        #step5.show("Step 5")
-
-        element6 = self.morphElement(1, 30)
-        step6 = step5.copy()
-        step6.data = morphology.binary_closing(step5.data, element6)
-        step6.show("Step 6")
-
-        labels = step6.copy()
-        labels.data = labels.data.astype("int")
-        labels.data = morphology.label(labels.data, 4, 0)
-        print "Number of Labels: ", labels.data.max()
-
-        #Retrieve the retangles from the label image
-        binary_input = self.binarize()
-        for region in regionprops(labels.data, ['BoundingBox', "label"]):
-
-            rect_y, rect_x, rect_y_2, rect_x_2 = region['BoundingBox']
-            width = rect_x_2 - rect_x
-            height = rect_y_2 - rect_y
-            patch = binary_input.data[rect_y:rect_y_2+1, rect_x:rect_x_2+1]
-            area = (width+1) * (height+1)
-            black = patch.sum()
-            horizontal = 0
-            vertical = 0
-            previous = 0
-            for lin in range(len(patch)):
-                for col in range(len(patch[0])):
-                    if patch[lin, col] != previous:
-                        horizontal += 1
-                    previous = patch[lin, col]
-            previous = 0
-            for col in range(len(patch[0])):
-                for lin in range(len(patch)):
-                    if patch[lin, col] != previous:
-                        vertical += 1
-                    previous = patch[lin, col]
-
-            #print black / area, horizontal / area, vertical / area
-            rectangleList.append(Rectangle(rect_x, rect_y, width, height,
-                                 patch, black, vertical, horizontal, area,
-                                 region["Label"]))
-
-        labels.showLabelBB(rectangleList)
-        return step5
 
 #######################################################
 #                                                     #

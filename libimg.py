@@ -4,6 +4,7 @@ from skimage.color import label2rgb
 from matplotlib import pyplot as plt
 from rectangles import *
 from scipy import ndimage
+import pylab
 import matplotlib.patches as mpatches
 import matplotlib.cm as cm
 import skimage.io as io
@@ -66,7 +67,8 @@ class NMImage ():
 
     def show(self, title=''):
         plt.figure()
-        if self.filename.endswith("pgm") or self.filename.endswith("pbm"):
+        if self.filename.endswith("pgm") or self.filename.endswith("pbm") \
+           or len(self.filename) == 0:
             plt.imshow(self.data, cmap=cm.gray)
         else:
             plt.imshow(self.data)
@@ -80,11 +82,16 @@ class NMImage ():
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.imshow(self.data, cmap=cm.gray)
+        counter = 0
         for r in rectangleList:
-            rect = mpatches.Rectangle((r.pos_x, r.pos_y), r.width, r.height,
-                                      fill=False, edgecolor=COLORS[r.label],
-                                      linewidth=2)
+            if r.label == 1:
+                counter += 1
+                rect = mpatches.Rectangle((r.pos_x, r.pos_y), r.width,
+                                          r.height, fill=False,
+                                          edgecolor=COLORS[r.label],
+                                          linewidth=2)
             ax.add_patch(rect)
+        fig.savefig("result"+str(counter)+".png")
 
     def showLabelImage(self, labelImage):
         fig = plt.figure()
@@ -171,67 +178,78 @@ class NMImage ():
         return morphology.rectangle(width, height)
 
     def morphologySegmentation(self):
-        rectangleList = []
-        step12 = self.binarize()
-        element12 = self.morphElement(100, 1)
-        step12 = step12.closing(element12)
-        #step12.show("Step 1-2")
+        morphological_elements = [[(100, 1), (1, 200), (1, 30), "Lines"],
+                                  [(30, 1), (1, 20), (1, 6), "Words"],
+                                  [(30, 1), (1, 20), (1, 1), "Letters"]]
+        for m_element in morphological_elements:
+            rectangleList = []
+            step12 = self.binarize()
+            element12 = self.morphElement(m_element[0][0], m_element[0][1])
+            step12 = step12.closing(element12)
+            #step12.show("Step 1-2")
 
-        step34 = self.binarize()
-        element34 = self.morphElement(1, 200)
-        step34 = step34.closing(element34)
-        #step34.show("Step 3-4")
+            step34 = self.binarize()
+            element34 = self.morphElement(m_element[1][0], m_element[1][1])
+            step34 = step34.closing(element34)
+            #step34.show("Step 3-4")
 
-        step5 = self.copy()
-        step5.data = numpy.logical_and(step12.data, step34.data)
-        #step5.show("Step 5")
+            step5 = self.copy()
+            step5.data = numpy.logical_and(step12.data, step34.data)
+            #step5.show("Step 5")
 
-        step6 = step5.copy()
-        element6 = self.morphElement(1, 30)
-        step6 = step6.closing(element6)
-        #step6.show("Step 6")
+            step6 = step5.copy()
+            element6 = self.morphElement(m_element[2][0], m_element[2][1])
+            step6 = step6.closing(element6)
+            step6.show("Step 6")
 
-        labels = step6.copy()
-        #labels.data = labels.data.astype("int")
-        labels.data = morphology.label(labels.data, 4, 0)
-        print "Number of Labels: ", labels.data.max()
+            labels = step6.copy()
+            #labels.data = labels.data.astype("int")
+            labels.data = morphology.label(labels.data, 8, 0)
+            #labels.show("Labels")
+            #print "Number of Labels: ", labels.data.max()
 
-        #Retrieve the retangles from the label image
-        binary_input = self.binarize()
-        for region in regionprops(labels.data, ['BoundingBox', "label"]):
+            #Retrieve the retangles from the label image
+            binary_input = self.binarize()
+            for region in regionprops(labels.data, ['BoundingBox', "label"]):
 
-            rect_y, rect_x, rect_y_2, rect_x_2 = region['BoundingBox']
-            width = rect_x_2 - rect_x
-            height = rect_y_2 - rect_y
-            patch = binary_input.data[rect_y:rect_y_2+1, rect_x:rect_x_2+1]
+                rect_y, rect_x, rect_y_2, rect_x_2 = region['BoundingBox']
+                width = rect_x_2 - rect_x
+                height = rect_y_2 - rect_y
+                patch = binary_input.data[rect_y:rect_y_2+1, rect_x:rect_x_2+1]
 
-            horizontal, vertical, previous = 0, 0, 0
-            area, black = patch.size, patch.sum()
+                horizontal, vertical, previous = 0, 0, 0
+                area, black = patch.size, patch.sum()
 
-            for lin in range(len(patch)):
-                for col in range(len(patch[0])):
-                    if patch[lin, col] != previous:
-                        horizontal += 1
-                    previous = patch[lin, col]
-            previous = 0
-            for col in range(len(patch[0])):
                 for lin in range(len(patch)):
-                    if patch[lin, col] != previous:
-                        vertical += 1
-                    previous = patch[lin, col]
+                    for col in range(len(patch[0])):
+                        if patch[lin, col] != previous:
+                            horizontal += 1
+                        previous = patch[lin, col]
+                previous = 0
+                for col in range(len(patch[0])):
+                    for lin in range(len(patch)):
+                        if patch[lin, col] != previous:
+                            vertical += 1
+                        previous = patch[lin, col]
 
-            if black / area > 0.18 or \
-               math.fabs(horizontal / area-vertical / area) > 0.005:
-                rectangleList.append(Rectangle(rect_x, rect_y, width, height,
-                                     patch, black, vertical, horizontal, area,
-                                     1))
-            else:
-                rectangleList.append(Rectangle(rect_x, rect_y, width, height,
-                                     patch, black, vertical, horizontal, area,
-                                     0))
-                #print black / area, horizontal / area, vertical / area
+                black_ratio = black / area
+                horizontal_ratio = horizontal / area
+                vertical_ratio = vertical / area
 
-        self.showBBoxes(rectangleList)
+                if (black_ratio > 0.18 and black_ratio < 0.75 and area > 100) \
+                    or math.fabs(horizontal_ratio-vertical_ratio) > 0.005 \
+                    and horizontal_ratio > vertical_ratio \
+                   and area > 100:
+                    rectangleList.append(Rectangle(rect_x, rect_y, width,
+                                         height, patch, black, vertical,
+                                         horizontal, area, 1))
+                else:
+                    rectangleList.append(Rectangle(rect_x, rect_y, width,
+                                         height, patch, black, vertical,
+                                         horizontal, area, 0))
+                    #print black / area, horizontal / area, vertical/area, area
+            print m_element[3], len([r for r in rectangleList if r.label == 1])
+            self.showBBoxes(rectangleList)
 
     def halfToningOrdered(self):
         normalized_img = self.normalize(0, 9)

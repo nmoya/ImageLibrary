@@ -1,6 +1,6 @@
 from __future__ import division
 from skimage.measure import regionprops
-from skimage.color import label2rgb
+from skimage.color import label2rgb, colorconv
 from matplotlib import pyplot as plt
 from rectangles import *
 from scipy import ndimage
@@ -23,14 +23,20 @@ class NMImage ():
         self.filename = kwargs.get("filename", '')
         self.sizex = kwargs.get("sizex", 0)
         self.sizey = kwargs.get("sizey", 0)
+        self.color = kwargs.get("color", False)
         self.maxval = 255
         if self.filename == '':
-            self.data = numpy.zeros(self.sizex * self.sizey)
-            self.data = self.data.astype("float64")
-            self.data = self.data.reshape(self.sizex, self.sizey)
+            if self.color:
+                self.data = numpy.zeros(self.sizex * self.sizey * 3)
+                self.data = self.data.reshape(self.sizex, self.sizey, 3)
+            else:
+                self.data = numpy.zeros(self.sizex * self.sizey)
+                self.data = self.data.reshape(self.sizex, self.sizey)
         else:
             self.data = self.open()
-        self.size = (self.sizey * self.sizex)
+
+        self.size = self.sizex * self.sizey
+        self.data = self.data.astype("float64")
 
     def __repr__(self):
         name = self.filename.split("/")[-1]
@@ -41,9 +47,11 @@ class NMImage ():
         if not self.filename.endswith(".pbm"):
             io.use_plugin("freeimage")
         self.data = io.imread(self.filename)
-        self.data = self.data.astype("float64")
+        #self.data = self.data.astype("float64")
         self.sizex = self.data.shape[0]
         self.sizey = self.data.shape[1]
+        if self.filename.endswith("ppm"):
+            self.color = True
 
         return self.data
 
@@ -62,7 +70,7 @@ class NMImage ():
     def getCoord(self, position):
         #http://cl.ly/image/380z3r3y1H19
         x = (position % (self.size)) % self.sizex
-        y = (position % (self.size)) / self.sizex
+        y = int((position % (self.size)) / self.sizex)
         return (x, y)
 
     def show(self, title=''):
@@ -70,6 +78,8 @@ class NMImage ():
         if self.filename.endswith("pgm") or self.filename.endswith("pbm") \
            or len(self.filename) == 0:
             plt.imshow(self.data, cmap=cm.gray)
+        elif self.filename.endswith("ppm"):
+            plt.imshow(self.data, cmap=cm.hsv)
         else:
             plt.imshow(self.data)
         plt.axis('off')
@@ -124,16 +134,17 @@ class NMImage ():
             return False
 
     def minmaxvalue(self):
-        minval = self.data[0][0]
-        maxval = self.data[0][0]
-        for i in range(self.size):
-            #print i
-            pixelvalue = self.getPixel(self.getCoord(i))
-            if pixelvalue < minval:
-                minval = pixelvalue
-            if pixelvalue > maxval:
-                maxval = pixelvalue
-        return minval, maxval
+        return numpy.amin(self.data), numpy.amax(self.data)
+
+    def rgb_to_hsv(self):
+        output = self.copy()
+        output.data = colorconv.rgb2hsv(output.data)
+        return output
+
+    def hsv_to_rgb(self):
+        output = self.copy()
+        output.data = colorconv.hsv2rgb(output.data)
+        return output
 
     def error(self, message, function):
         import sys
@@ -147,6 +158,44 @@ class NMImage ():
 #                                                     #
 #                                                     #
 #######################################################
+
+    def scaleMatrix(self, scale):
+        matrix = numpy.zeros(4)
+        matrix = matrix.reshape((2, 2))
+
+        scale = 1.0/scale
+
+        matrix[0, 0] = scale
+        matrix[1, 1] = scale
+
+        return matrix
+
+    def scale(self, scale, method):
+        if isinstance(scale, list):
+            scale = map(float, scale)
+            scaled_image = NMImage(sizex=scale[0], sizey=scale[1], color=True)
+        else:
+            scale = float(scale)
+            scaled_image = NMImage(sizex=int(self.sizex*scale),
+                                   sizey=int(self.sizey*scale), color=True)
+            print self.sizex*scale
+
+        for i in range(scaled_image.size):
+            coord_1 = scaled_image.getCoord(i)
+            coord_2 = (coord_1[X]/scale, coord_1[Y]/scale)
+            #if method == "nneighbour":
+            coord_2 = (int(coord_2[X]), int(coord_2[Y]))
+            #elif method == "bilinear":
+                #pass
+            #else:   # bicubic
+                #pass
+
+            if self.validCoord(coord_2):  # Valid on the original image
+                scaled_image.putPixel(coord_1, self.getPixel(coord_2))
+
+        print self.size, scaled_image.size
+        scaled_image.show("Huge")
+        return scaled_image
 
     def erode(self, kernel):
         kernel_sum = kernel.sum()
@@ -198,6 +247,7 @@ class NMImage ():
             #step5.show("Step 5")
 
             step6 = step5.copy()
+            step6.show("Letras")
             element6 = self.morphElement(m_element[2][0], m_element[2][1])
             step6 = step6.closing(element6)
             step6.show("Step 6")

@@ -154,7 +154,7 @@ class NMImage ():
 #                                                     #
 #######################################################
 
-   def scaleMatrix(self, scale_x, scale_y):
+    def scaleMatrix(self, scale_x, scale_y):
         matrix = numpy.zeros(9)
         matrix = matrix.reshape((3, 3))
 
@@ -228,10 +228,14 @@ class NMImage ():
 
             value = 0
             if self.validCoord(rounded_coord):
-                value = (1-dx)*(1-dy)*extended_image[rounded_coord[X], rounded_coord[Y]] + \
-                    dx*(1-dy)*extended_image[rounded_coord[X]+1, rounded_coord[Y]] +      \
-                    (1-dx)*dy*extended_image[rounded_coord[X], rounded_coord[Y]+1] +      \
-                    dx*dy*extended_image[rounded_coord[X]+1, rounded_coord[Y]+1]
+                value = (1-dx)*(1-dy)*extended_image[rounded_coord[X],
+                                                     rounded_coord[Y]] + \
+                    dx*(1-dy)*extended_image[rounded_coord[X]+1,
+                                             rounded_coord[Y]] +  \
+                    (1-dx)*dy*extended_image[rounded_coord[X],
+                                             rounded_coord[Y]+1] + \
+                    dx*dy*extended_image[rounded_coord[X]+1,
+                                         rounded_coord[Y]+1]
                 output_image.putPixel(current_coord, value)
 
         return output_image
@@ -313,11 +317,12 @@ class NMImage ():
 
     def rotate(self, theta, method):
         theta = math.radians(theta)
-        new_x = math.fabs(self.sizex*math.cos(theta))+math.fabs(self.sizey*math.sin(theta))
-        new_y = math.fabs(self.sizex*math.sin(theta))+math.fabs(self.sizey*math.cos(theta))
+        new_x = math.fabs(self.sizex*math.cos(theta)) + \
+            math.fabs(self.sizey*math.sin(theta))
+        new_y = math.fabs(self.sizex*math.sin(theta)) + \
+            math.fabs(self.sizey*math.cos(theta))
         rotated_image = NMImage(sizex=int(new_x), sizey=int(new_y), color=True)
-        #rotated_image = NMImage(sizex=int(self.sizex), sizey=int(self.sizey), color=True)
-        
+
         direct_matrix = self.rotationMatrix(theta)
         inverted_matrix = self.rotationMatrix(-theta)
 

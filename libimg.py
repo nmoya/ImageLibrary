@@ -59,6 +59,7 @@ class NMImage ():
         if self.data.dtype != "uint8":
             self.data = self.data.astype("uint8")
         io.use_plugin("freeimage")
+        print "Saving: ", self.sizex, self.sizey
         io.imsave(name, self.data)
 
     def getPixel(self, coord):
@@ -69,7 +70,7 @@ class NMImage ():
 
     def getCoord(self, position):
         #http://cl.ly/image/380z3r3y1H19
-        x = (position % (self.size)) % self.sizex
+        x = int((position % (self.size)) % self.sizex)
         y = int((position % (self.size)) / self.sizex)
         return (x, y)
 
@@ -134,17 +135,11 @@ class NMImage ():
             return False
 
     def minmaxvalue(self):
-        return numpy.amin(self.data), numpy.amax(self.data)
-
-    def rgb_to_hsv(self):
-        output = self.copy()
-        output.data = colorconv.rgb2hsv(output.data)
-        return output
-
-    def hsv_to_rgb(self):
-        output = self.copy()
-        output.data = colorconv.hsv2rgb(output.data)
-        return output
+        if self.color:
+            print "Not impelented minmax for color images"
+            return 0, 0
+        else:
+            return numpy.amin(self.data), numpy.amax(self.data)
 
     def error(self, message, function):
         import sys
@@ -159,43 +154,187 @@ class NMImage ():
 #                                                     #
 #######################################################
 
-    def scaleMatrix(self, scale):
-        matrix = numpy.zeros(4)
-        matrix = matrix.reshape((2, 2))
+   def scaleMatrix(self, scale_x, scale_y):
+        matrix = numpy.zeros(9)
+        matrix = matrix.reshape((3, 3))
 
-        scale = 1.0/scale
-
-        matrix[0, 0] = scale
-        matrix[1, 1] = scale
+        matrix[0, 0] = scale_x
+        matrix[1, 1] = scale_y
+        matrix[2, 2] = 1  # W
 
         return matrix
 
-    def scale(self, scale, method):
-        if isinstance(scale, list):
-            scale = map(float, scale)
-            scaled_image = NMImage(sizex=scale[0], sizey=scale[1], color=True)
+    def rotationMatrix(self, theta):
+        matrix = numpy.zeros(9)
+        matrix = matrix.reshape((3, 3))
+
+        matrix[0, 0] = math.cos(theta)
+        matrix[1, 1] = math.cos(theta)
+
+        matrix[0, 1] = - math.sin(theta)
+        matrix[1, 0] = math.sin(theta)
+
+        matrix[2, 2] = 1  # W
+
+        return matrix
+
+    def computeOffset(self, direct_matrix):
+        edge = numpy.array([[0, 0, 1],
+                            [self.sizex-1, 0, 1],
+                            [self.sizex-1, self.sizey-1, 1],
+                            [0, self.sizey-1, 1]])
+        edge = direct_matrix.dot(edge.T)
+        return edge[0].min(), edge[1].min()
+
+    def interpolate_nneighbour(self, output_image, inverted_matrix,
+                               direct_matrix=None):
+        xmin, ymin = 0, 0
+        if direct_matrix is not None:
+            xmin, ymin = self.computeOffset(direct_matrix)
+
+        for i in range(output_image.size):
+            current_coord = output_image.getCoord(i)
+            transformed_coord = inverted_matrix.dot([current_coord[X]+xmin,
+                                                    current_coord[Y]+ymin, 1])
+
+            transformed_coord = (int(transformed_coord[X]),
+                                 int(transformed_coord[Y]))
+
+            if self.validCoord(transformed_coord):  # Valid coord?
+                output_image.putPixel(current_coord,
+                                      self.getPixel(transformed_coord))
+
+        return output_image
+
+    def interpolate_bilinear(self, output_image, inverted_matrix,
+                             direct_matrix=None):
+        extended_image = numpy.pad(self.data, ((0, 1), (0, 1), ((0, 0))),
+                                   "edge")
+
+        xmin, ymin = 0, 0
+        if direct_matrix is not None:
+            xmin, ymin = self.computeOffset(direct_matrix)
+
+        for i in range(output_image.size):
+            current_coord = output_image.getCoord(i)
+            transformed_coord = inverted_matrix.dot([current_coord[X]+xmin,
+                                                    current_coord[Y]+ymin, 1])
+
+            rounded_coord = (int(transformed_coord[X]),
+                             int(transformed_coord[Y]))
+
+            dx = transformed_coord[X] - rounded_coord[X]
+            dy = transformed_coord[Y] - rounded_coord[Y]
+
+            value = 0
+            if self.validCoord(rounded_coord):
+                value = (1-dx)*(1-dy)*extended_image[rounded_coord[X], rounded_coord[Y]] + \
+                    dx*(1-dy)*extended_image[rounded_coord[X]+1, rounded_coord[Y]] +      \
+                    (1-dx)*dy*extended_image[rounded_coord[X], rounded_coord[Y]+1] +      \
+                    dx*dy*extended_image[rounded_coord[X]+1, rounded_coord[Y]+1]
+                output_image.putPixel(current_coord, value)
+
+        return output_image
+
+    def R(self, s):
+        value = self.P(s+2)**3 - 4*self.P(s+1)**3 + \
+            6*self.P(s)**3 - 4*self.P(s-1)**3
+        value = value/6.
+        return value
+
+    def P(self, t):
+        if t > 0:
+            return t
         else:
-            scale = float(scale)
-            scaled_image = NMImage(sizex=int(self.sizex*scale),
-                                   sizey=int(self.sizey*scale), color=True)
-            print self.sizex*scale
+            return 0
 
-        for i in range(scaled_image.size):
-            coord_1 = scaled_image.getCoord(i)
-            coord_2 = (coord_1[X]/scale, coord_1[Y]/scale)
-            #if method == "nneighbour":
-            coord_2 = (int(coord_2[X]), int(coord_2[Y]))
-            #elif method == "bilinear":
-                #pass
-            #else:   # bicubic
-                #pass
+    def interpolate_bicubic(self, output_image, inverted_matrix,
+                            direct_matrix=None):
+        xmin, ymin = 0, 0
+        if direct_matrix is not None:
+            xmin, ymin = self.computeOffset(direct_matrix)
+        extended_image = numpy.pad(self.data, ((1, 2), (1, 2), ((0, 0))),
+                                   "edge")
 
-            if self.validCoord(coord_2):  # Valid on the original image
-                scaled_image.putPixel(coord_1, self.getPixel(coord_2))
+        neighbours = []
+        for i in range(-1, 3):
+            for j in range(-1, 3):
+                neighbours.append((i, j))
 
-        print self.size, scaled_image.size
-        scaled_image.show("Huge")
+        for i in range(output_image.size):
+            current_coord = output_image.getCoord(i)
+            transformed_coord = inverted_matrix.dot([current_coord[X]+xmin,
+                                                    current_coord[Y]+ymin, 1])
+
+            rounded_coord = (int(transformed_coord[X]),
+                             int(transformed_coord[Y]))
+
+            dx = transformed_coord[X] - rounded_coord[X]
+            dy = transformed_coord[Y] - rounded_coord[Y]
+
+            value = 0
+            for neigh in neighbours:
+                n_coord = (transformed_coord[X] + neigh[X],
+                           transformed_coord[Y] + neigh[Y])
+                if self.validCoord(n_coord):  # Valid coord?
+                    value += self.getPixel(n_coord) * \
+                        self.R(neigh[X]-dx) * self.R(dy-neigh[Y])
+            output_image.putPixel(current_coord, value)
+
+        return output_image
+
+    def scale(self, scale_factor, method):
+        if isinstance(scale_factor, list):
+            scale_factor = map(int, scale_factor)
+            scaled_image = NMImage(sizex=scale_factor[0],
+                                   sizey=scale_factor[1],
+                                   color=True)
+            scale_x = float(scale_factor[0]/self.sizex)
+            scale_y = float(scale_factor[1]/self.sizey)
+        else:
+            scale_x = float(scale_factor)
+            scale_y = float(scale_factor)
+            scaled_image = NMImage(sizex=int(self.sizex*scale_x),
+                                   sizey=int(self.sizey*scale_y),
+                                   color=True)
+
+        inverted_matrix = self.scaleMatrix(1./scale_x, 1./scale_y)
+
+        if method == 'nneighbour':
+            scaled_image = self.interpolate_nneighbour(scaled_image,
+                                                       inverted_matrix)
+        elif method == 'bilinear':
+            scaled_image = self.interpolate_bilinear(scaled_image,
+                                                     inverted_matrix)
+        elif method == 'bicubic':
+            scaled_image = self.interpolate_bicubic(scaled_image,
+                                                    inverted_matrix)
         return scaled_image
+
+    def rotate(self, theta, method):
+        theta = math.radians(theta)
+        new_x = math.fabs(self.sizex*math.cos(theta))+math.fabs(self.sizey*math.sin(theta))
+        new_y = math.fabs(self.sizex*math.sin(theta))+math.fabs(self.sizey*math.cos(theta))
+        rotated_image = NMImage(sizex=int(new_x), sizey=int(new_y), color=True)
+        #rotated_image = NMImage(sizex=int(self.sizex), sizey=int(self.sizey), color=True)
+        
+        direct_matrix = self.rotationMatrix(theta)
+        inverted_matrix = self.rotationMatrix(-theta)
+
+        if method == 'nneighbour':
+            rotated_image = self.interpolate_nneighbour(rotated_image,
+                                                        inverted_matrix,
+                                                        direct_matrix)
+
+        elif method == 'bilinear':
+            rotated_image = self.interpolate_bilinear(rotated_image,
+                                                      inverted_matrix,
+                                                      direct_matrix)
+        elif method == 'bicubic':
+            rotated_image = self.interpolate_bicubic(rotated_image,
+                                                     inverted_matrix,
+                                                     direct_matrix)
+        return rotated_image
 
     def erode(self, kernel):
         kernel_sum = kernel.sum()

@@ -12,22 +12,20 @@ def main():
     parser.add_argument('-a', '--angle', help='Angle (ccw)', required=False)
     parser.add_argument('-s', '--scale', help='Scale Factor', required=False)
     parser.add_argument('-d', '--dimension', help='WxH', required=False)
-    parser.add_argument('-m', '--method', help='Scale Method', required=False)
+    parser.add_argument('-m', '--method', help='Scale Method', required=True)
     parser.add_argument('-i', '--input', help='Input image', required=True)
     parser.add_argument('-o', '--output', help='Output image. result.ppm if \
                         not specified', required=False)
 
     args = vars(parser.parse_args())
     output_name = "result.ppm"
-    if args["output"]:
+    if args["output"] is not None:
         output_name = args["output"]
-    if not args["method"]:
-        args["method"] = "nneighbours"
 
     print "Processing..."
 
     image = libimg.NMImage(filename=args["input"])
-    image.show("original")
+    print "Original: ", image.sizex, image.sizey, image.size
     #image.show("Original")
     #output = image.rgb_to_hsv()
     #output.show("Converted")
@@ -37,6 +35,7 @@ def main():
 
     if args["scale"] is not None:
         scaled_image = image.scale(args["scale"], args["method"])
+        print "Scaled: ", scaled_image.sizex, scaled_image.sizey, scaled_image.size
     elif args["dimension"] is not None:
         scaled_image = image.scale(args["dimension"].split("x"),
                                    args["method"])
@@ -47,7 +46,6 @@ def main():
     if scaled_image is not None:
         scaled_image.save(output_name)
     if rotated_image is not None:
-        rotated_image.show("Rotated Image")
         rotated_image.save(output_name)
 
     print "Result saved:", output_name
